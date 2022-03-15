@@ -27,7 +27,7 @@ def get_tags(post_id, args: Namespace):
     session = requests.Session()
     session.auth = (username, api_key)
 
-    user_agent = f"tag-parser by smutkitty (under user '{username}') 0.1.0"
+    user_agent = f"tag-parser by dragos240 (under user '{username}') 0.1.0"
     headers = {'User-Agent': user_agent}
 
     try:
