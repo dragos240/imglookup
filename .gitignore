@@ -1,0 +1,7 @@
+*cache*
+stubs
+*.json
+identify_images_v1.1.py
+*.sublime*
+*.png
+.env
