@@ -13,6 +13,8 @@ def main(args):
     paths = [args.path]
     if args.path and os.path.isdir(args.path):
         paths = get_recursive_images(args.path)
+    elif not args.path:
+        paths = None
 
     # {file_path: [post_id1, post_id2, ...]}
     file_sets = get_post_ids(paths, args)
