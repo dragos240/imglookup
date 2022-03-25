@@ -47,14 +47,15 @@ url = url_fmt + parse.urlencode(kvs)
 
 
 def sort_func(e):
-    return 90 - float(e['header']['similarity'])
+    return 85 - float(e['header']['similarity'])
 
 
 def filter_func(e):
-    return float(e['header']['similarity']) > 90.0
+    return float(e['header']['similarity']) > 85.0
 
 
-def get_post_ids(paths: list[str], args: Namespace) -> dict[str, list[str]]:
+def get_post_ids(paths: list[str],
+                 args: Namespace) -> dict[str, list[str]]:
     """Gets post IDs from paths"""
     files = {}
     if not paths and args.saucenao:
@@ -131,8 +132,9 @@ def fetch_response(path: str, store_json: bool) -> (dict, dict):
 
 
 @contextmanager
-def get_thumbnail(path: str):
-    file_format: str = path.split('.')[-1].upper()
+def get_thumbnail(path: str) -> BytesIO:
+    """Returns a contextmanager which yields thumbnail data"""
+    file_format = get_format_type(path)
 
     image = Image.open(path)
     image = image.convert('RGB')
@@ -146,3 +148,12 @@ def get_thumbnail(path: str):
         yield image_data
     finally:
         image_data.close()
+
+
+def get_format_type(path) -> str:
+    """Gets the format type for a file"""
+    file_format: str = path.split('.')[-1].upper()
+    if file_format == "JPG":
+        file_format = "JPEG"
+
+    return file_format

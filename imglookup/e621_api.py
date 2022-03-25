@@ -45,10 +45,5 @@ def get_tags(post_id, args: Namespace):
 def parse_json(text: str):
     data = json.loads(text)
     tags_block = data['post']['tags']
-    print("tags_block:", tags_block)
-    tags = []
-    for category in ('general', 'artist'):
-        tags = tags_block[category]
-        tags.extend(tags)
 
-    return tags
+    return tags_block
