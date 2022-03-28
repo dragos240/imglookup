@@ -50,48 +50,48 @@ def main(args):
                     if artist.endswith('_(artist)'):
                         artist = artist.replace('_(artist)', '')
                     artists.append(artist)
-            src_dir_path, _, file_ext = \
+            src_dir_path, src_file_name_base, file_ext = \
                 get_path_components(src_file_path)
 
             # Make dst_dir_path use dst_base_dir
             dst_dir_path = normpath(src_dir_path
                                     .replace(src_base_dir, dst_base_dir))
-            sep = '\n      '
-            verbose(f'src_file_path: {src_file_path},{sep}'
-                    f'src_base_dir: {src_base_dir},{sep}'
-                    f'dst_base_dir: {dst_base_dir},{sep}'
-                    f'src_dir_path: {src_dir_path},{sep}'
-                    f'dst_dir_path: {dst_dir_path},')
             if not exists(dst_dir_path):
                 mkdir(dst_dir_path)
 
-            # Rename or copy (in case of --base-dir being set) file
-            # Format: ARTISTS-POST_ID.EXT
-            new_name = f'{"-".join(artists)}-{post_id}.{file_ext}'
-            dst_file_path = path_join(dst_dir_path, new_name)
-            src_dir_path = normpath(src_dir_path)
-            if src_dir_path == dst_dir_path:
-                verbose(f"{src_dir_path} and {dst_dir_path} match")
-                if exists(dst_file_path):
-                    remove(dst_file_path)
-                rename(src_file_path, dst_file_path)
-            else:
-                verbose(f"{src_dir_path} and {dst_dir_path} do not match")
-                copyfile(src_file_path, dst_file_path)
+            dst_file_path = path_join(dst_dir_path, src_file_name_base)
+            if not args.no_rename:
+                # Rename or copy (in case of --base-dir being set) file
+                # Format: ARTISTS-POST_ID.EXT
+                new_name = f'{"-".join(artists)}-{post_id}.{file_ext}'
+                dst_file_path = path_join(dst_dir_path, new_name)
+                src_dir_path = normpath(src_dir_path)
+                if src_dir_path == dst_dir_path:
+                    verbose(f"{src_dir_path} and {dst_dir_path} match")
+                    if exists(dst_file_path):
+                        remove(dst_file_path)
+                    rename(src_file_path, dst_file_path)
+                else:
+                    verbose(f"{src_dir_path} and {dst_dir_path} do not match")
+                    copyfile(src_file_path, dst_file_path)
 
             # Create tags JSON
             json_path = dst_file_path + '.json'
             with open(json_path, 'w') as f:
-                f.write(json.dumps(tags))
+                f.write(json.dumps(tags, indent=2))
             verbose(f'Tags written to {json_path}')
 
 
 if __name__ == '__main__':
+    # Do the argument parsing in this block
     parser = ArgumentParser()
     parser.add_argument("path",
                         type=str,
                         help="Path(s) to image(s) "
                              "(use empty string if debugging)")
+    parser.add_argument("-n", "--no-rename",
+                        action="store_true",
+                        help="Don't rename the file")
     parser.add_argument("-s", "--store-json",
                         action="store_true",
                         help="Saves JSON responses from APIs")
