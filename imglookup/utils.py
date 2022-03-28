@@ -28,7 +28,7 @@ def err(*msg, error=None):
     if error is None:
         raise Exception(f"ERR: {msg}")
         return
-    print("ERR:", msg)
+    print("ERR:", *msg)
     raise error
 
 
