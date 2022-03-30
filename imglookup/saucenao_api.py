@@ -25,11 +25,6 @@ class ApiError(Exception):
     pass
 
 
-class AccountError(Exception):
-    """For SauceNao account issues (like limits)"""
-    pass
-
-
 class DBType:
     GELBOORU = 25
     E621 = 29
@@ -45,18 +40,23 @@ kvs = {
 }
 url = url_fmt + parse.urlencode(kvs)
 
+SIMILARITY_THRESHOLD = 85.0
+MAX_FETCH_ATTEMPTS = 3
+
 
 def sort_func(e):
-    return 85 - float(e['header']['similarity'])
+    """Sort by similarity"""
+    return SIMILARITY_THRESHOLD - float(e['header']['similarity'])
 
 
 def filter_func(e):
-    return float(e['header']['similarity']) > 85.0
+    """Return True if `similarity` is greater than the threshold"""
+    return float(e['header']['similarity']) > SIMILARITY_THRESHOLD
 
 
 def get_post_ids(paths: list[str],
                  args: Namespace) -> dict[str, list[str]]:
-    """Gets post IDs from paths"""
+    """Gets post IDs for each path"""
     files = {}
     if not paths and args.saucenao:
         paths = [args.saucenao]
@@ -94,8 +94,6 @@ def get_post_ids(paths: list[str],
             files[path] = post_ids
     except ApiError as e:
         err("ApiError occurred", error=e)
-    except AccountError as e:
-        err("AccountError occurred", error=e)
     except Exception as e:
         err("Other error encountered:", error=e)
 
@@ -110,10 +108,12 @@ def fetch_response(path: str, store_json: bool) -> (dict, dict):
             return res['header'], res['results']
     file_ext = path.split('.')[-1]
     files = {}
+    # Use a thumbnail instead of base image to reduce bandwidth for very large
+    # images
     with get_thumbnail(path) as image_data:
         files['file'] = (f'image.{file_ext}', image_data.getvalue())
 
-    for _ in range(3):
+    for _ in range(MAX_FETCH_ATTEMPTS):
         r = requests.post(url, files=files)
         if r.status_code != 200:
             if r.status_code == 403:
@@ -123,6 +123,7 @@ def fetch_response(path: str, store_json: bool) -> (dict, dict):
             sleep(10)
             continue
 
+        # If `store_json` is set, save the resulting JSON for later parsing
         if store_json:
             with open('debug-saucenao.json', 'w') as f:
                 f.write(r.text)

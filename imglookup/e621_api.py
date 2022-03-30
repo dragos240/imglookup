@@ -15,7 +15,9 @@ api_key = getenv('e621_api_key')
 base_url = "https://e621.net/posts/{}.json"
 
 
-def get_tags(post_id, args: Namespace):
+def get_tags(post_id: str, args: Namespace) -> dict[str, list[str]]:
+    """Get tags in format {CATEGORY: [tag1, ... tagN]}"""
+    # TODO: Make this more generic so it returns the tags in list format
     store_json = args.store_json
     e621_json = args.e621
     if e621_json is not None:
@@ -43,6 +45,7 @@ def get_tags(post_id, args: Namespace):
 
 
 def parse_json(text: str):
+    """Load the JSON and return the tags"""
     data = json.loads(text)
     tags_block = data['post']['tags']
 

@@ -32,7 +32,8 @@ def err(*msg, error=None):
     raise error
 
 
-def get_recursive_images(dirpath: str):
+def get_recursive_images(dirpath: str) -> list[str]:
+    """Return list of images within a directory"""
     paths = []
     for idx, (root, dirs, files) in enumerate(walk(dirpath)):
         for file in files:
