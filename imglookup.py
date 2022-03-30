@@ -46,65 +46,67 @@ def main(args):
         file_tags = {}
         for post_id in post_ids:
             file_tags[post_id] = get_tags(post_id, args)
-        # If there's only one close result, use it
-        if len(post_ids) == 1:
-            post_id = post_ids[0]
-            tags = []
-            artists = ['unknown_artist']
-            # Split the tags from their categories and parse them
-            for category, tag_list in file_tags[post_id].items():
-                # If the category is not `artist`, add to the main tag list
-                # This is used when re-naming the file if `no_rename` is false
-                if category != 'artist':
-                    tags.extend(tag_list)
+        # Select top result
+        post_id = post_ids[0]
+        tags = []
+        artists = ['unknown_artist']
+        # Split the tags from their categories and parse them
+        for category, tag_list in file_tags[post_id].items():
+            # If the category is not `artist`, add to the main tag list
+            # This is used when re-naming the file if `no_rename` is false
+            if category != 'artist':
+                tags.extend(tag_list)
+                continue
+            # There could be multiple artists, so iterate over them
+            artists = []
+            for artist in tag_list:
+                # Some artists have tags ending in `_artist()`, remove
+                # the suffix
+                if artist.endswith('_(artist)'):
+                    artist = artist.replace('_(artist)', '')
+                elif artist in ('conditional_dnp', 'sound_warning'):
                     continue
-                # There could be multiple artists, so iterate over them
-                artists = []
-                for artist in tag_list:
-                    # Some artists have tags ending in `_artist()`, remove
-                    # the suffix
-                    if artist.endswith('_(artist)'):
-                        artist = artist.replace('_(artist)', '')
-                    artists.append(artist)
+                artists.append(artist)
 
-            # Split each file name into the base directory, base name
-            # (without an extension), and the extension
-            src_dir_path, src_file_name_base, file_ext = \
-                get_path_components(src_file_path)
+        # Split each file name into the base directory, base name
+        # (without an extension), and the extension
+        src_dir_path, src_file_name_base, file_ext = \
+            get_path_components(normpath(src_file_path))
 
-            # Replace the root source directory with the base directory and
-            # re-base it in case `base_dir` is set
-            dst_dir_path = normpath(src_dir_path
-                                    .replace(src_base_dir, dst_base_dir))
-            # In the case where `base_dir` is set, we may need to create the
-            # directory structure, so create if necessary
-            if not exists(dst_dir_path):
-                mkdir(dst_dir_path)
+        # Replace the root source directory with the base directory and
+        # re-base it in case `base_dir` is set
+        dst_dir_path = normpath(src_dir_path
+                                .replace(src_base_dir, dst_base_dir))
+        # In the case where `base_dir` is set, we may need to create the
+        # directory structure, so create if necessary
+        if not exists(dst_dir_path):
+            mkdir(dst_dir_path)
 
-            # Set destination file path in case `base_dir` is set
-            dst_file_path = path_join(dst_dir_path, src_file_name_base)
-            # If `no_rename` is false, rename or copy the file (useful when)
-            # searching based on artist(s)
-            if not args.no_rename:
-                # Rename or copy (in case of --base-dir being set) file
-                # Format: ARTISTS-POST_ID.EXT
-                new_name = f'{"-".join(artists)}-{post_id}.{file_ext}'
-                dst_file_path = path_join(dst_dir_path, new_name)
-                src_dir_path = normpath(src_dir_path)
-                if src_dir_path == dst_dir_path:
+        # Set destination file path in case `base_dir` is set
+        dst_file_path = path_join(dst_dir_path, src_file_name_base)
+        # If `no_rename` is false, rename or copy the file (useful when)
+        # searching based on artist(s)
+        if not args.no_rename:
+            # Rename or copy (in case of --base-dir being set) file
+            # Format: ARTISTS-POST_ID.EXT
+            new_name = f'{"-".join(artists)}-{post_id}.{file_ext}'
+            dst_file_path = path_join(dst_dir_path, new_name)
+            src_dir_path = normpath(src_dir_path)
+            if src_dir_path == dst_dir_path:
+                if src_file_path != dst_file_path:
                     verbose(f"{src_dir_path} and {dst_dir_path} match")
                     if exists(dst_file_path):
                         remove(dst_file_path)
                     rename(src_file_path, dst_file_path)
-                else:
-                    verbose(f"{src_dir_path} and {dst_dir_path} do not match")
-                    copyfile(src_file_path, dst_file_path)
+            else:
+                verbose(f"{src_dir_path} and {dst_dir_path} do not match")
+                copyfile(src_file_path, dst_file_path)
 
-            # Create tags JSON for each file
-            json_path = dst_file_path + '.json'
-            with open(json_path, 'w') as f:
-                f.write(json.dumps(tags, indent=2))
-            verbose(f'Tags written to {json_path}')
+        # Create tags JSON for each file
+        json_path = dst_file_path + '.json'
+        with open(json_path, 'w') as f:
+            f.write(json.dumps(tags, indent=2))
+        verbose(f'Tags written to {json_path}')
 
 
 if __name__ == '__main__':

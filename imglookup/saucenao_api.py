@@ -3,6 +3,7 @@ from time import sleep
 from urllib import parse
 from contextlib import contextmanager
 from os import getenv
+from os.path import exists
 import json
 from argparse import Namespace
 
@@ -40,7 +41,7 @@ kvs = {
 }
 url = url_fmt + parse.urlencode(kvs)
 
-SIMILARITY_THRESHOLD = 85.0
+SIMILARITY_THRESHOLD = 60.0
 MAX_FETCH_ATTEMPTS = 3
 
 
@@ -62,6 +63,10 @@ def get_post_ids(paths: list[str],
         paths = [args.saucenao]
     try:
         for path in paths:
+            if exists(path + '.json'):
+                print(f"Tag file exists for {path}, skipping...")
+                continue
+            print(f"Beginning parse for {path}...")
             post_ids = []
             header, results = fetch_response(path, args.store_json)
 
@@ -69,7 +74,6 @@ def get_post_ids(paths: list[str],
             user_id = int(header['user_id'])
             status = int(header['status'])
             if user_id > 0:
-                verbose("User ID is valid")
                 if status > 0:
                     warn("Index resolution error.")
                 elif status < 0:
