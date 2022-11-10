@@ -1,8 +1,9 @@
 from io import BytesIO
 from time import sleep
+from typing import Iterator, List, Tuple, Dict
 from urllib import parse
 from contextlib import contextmanager
-from os import getenv
+from os import environ
 from os.path import exists
 import json
 from argparse import Namespace
@@ -11,35 +12,64 @@ import requests
 from PIL import Image
 from dotenv import load_dotenv
 
-from .utils import (verbose,
+from .utils import (verb,
                     err,
                     warn)
-
-load_dotenv()
-
-api_key = getenv('saucenao_api_key')
-debug_url = "http://127.0.0.1:5000/"
+from .api import Api, ApiError, DBType
 
 
-class ApiError(Exception):
-    """For SauceNao API/Index issues"""
-    pass
+API_URL = "https://saucenao.com/search.php"
 
 
-class DBType:
-    GELBOORU = 25
-    E621 = 29
+class SauceNaoApi(Api):
+    def __init__(self):
+        super().__init__()
+        self.api_key = environ['saucenao_api_key']
+        kvs = {
+            'api_key': self.api_key,
+            'db': DBType.E621,
+            'output_type': 2,
+            'testmode': True,
+            'numres': 4
+        }
+        self.url = API_URL + parse.urlencode(kvs)
 
+    def get_results(self):
+        pass
 
-url_fmt = "https://saucenao.com/search.php?"
-kvs = {
-    'api_key': api_key,
-    'db': DBType.E621,
-    'output_type': 2,
-    'testmode': True,
-    'numres': 4
-}
-url = url_fmt + parse.urlencode(kvs)
+    def fetch_response(self,
+                       path: str,
+                       store_json: bool = False) -> Tuple[dict, dict]:
+        """Handles the REST response, returns the header and results"""
+        if path.endswith('.json'):
+            with open(path, 'r') as f:
+                res = json.loads(f.read())
+                return res['header'], res['results']
+        file_ext = path.split('.')[-1]
+        files = {}
+        # Use a thumbnail instead of base image to reduce bandwidth for very
+        # large images
+        with get_thumbnail(path) as image_data:
+            files['file'] = (f'image.{file_ext}', image_data.getvalue())
+
+        for _ in range(MAX_FETCH_ATTEMPTS):
+            r = requests.post(self.url, files=files)
+            if r.status_code != 200:
+                if r.status_code == 403:
+                    raise ApiError("Invalid API key")
+                warn("Sleeping for 10s after status code:",
+                     r.status_code)
+                sleep(10)
+                continue
+
+            # If `store_json` is set, save the resulting JSON for later parsing
+            if store_json:
+                with open('debug-saucenao.json', 'w') as f:
+                    f.write(r.text)
+            res = json.loads(r.text)
+            return res['header'], res['results']
+        raise Exception("Out of attempts.")
+
 
 SIMILARITY_THRESHOLD = 60.0
 MAX_FETCH_ATTEMPTS = 3
@@ -55,8 +85,8 @@ def filter_func(e):
     return float(e['header']['similarity']) > SIMILARITY_THRESHOLD
 
 
-def get_post_ids(paths: list[str],
-                 args: Namespace) -> dict[str, list[str]]:
+def get_post_ids(paths: List[str],
+                 args: Namespace) -> Dict[str, List[str]]:
     """Gets post IDs for each path"""
     files = {}
     if not paths and args.saucenao:
@@ -92,8 +122,8 @@ def get_post_ids(paths: list[str],
                     post_id = result['data']['e621_id']
                     post_ids.append(post_id)
                 except KeyError:
-                    verbose("KeyError. Continuing")
-                    verbose("json_data:", result['data'])
+                    verb("KeyError. Continuing")
+                    verb("json_data:", result['data'])
                     continue
             files[path] = post_ids
     except ApiError as e:
@@ -104,40 +134,8 @@ def get_post_ids(paths: list[str],
     return files
 
 
-def fetch_response(path: str, store_json: bool) -> (dict, dict):
-    """Handles the REST response, returns the header and results"""
-    if path.endswith('.json'):
-        with open(path, 'r') as f:
-            res = json.loads(f.read())
-            return res['header'], res['results']
-    file_ext = path.split('.')[-1]
-    files = {}
-    # Use a thumbnail instead of base image to reduce bandwidth for very large
-    # images
-    with get_thumbnail(path) as image_data:
-        files['file'] = (f'image.{file_ext}', image_data.getvalue())
-
-    for _ in range(MAX_FETCH_ATTEMPTS):
-        r = requests.post(url, files=files)
-        if r.status_code != 200:
-            if r.status_code == 403:
-                raise ApiError("Invalid API key")
-            warn("Sleeping for 10s after status code:",
-                 r.status_code)
-            sleep(10)
-            continue
-
-        # If `store_json` is set, save the resulting JSON for later parsing
-        if store_json:
-            with open('debug-saucenao.json', 'w') as f:
-                f.write(r.text)
-        res = json.loads(r.text)
-        return res['header'], res['results']
-    raise Exception("Out of attempts.")
-
-
 @contextmanager
-def get_thumbnail(path: str) -> BytesIO:
+def get_thumbnail(path: str) -> Iterator[BytesIO]:
     """Returns a contextmanager which yields thumbnail data"""
     file_format = get_format_type(path)
 

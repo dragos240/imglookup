@@ -115,7 +115,7 @@ if __name__ == '__main__':
     parser.add_argument("path",
                         type=str,
                         help="Path(s) to image(s) "
-                             "(use empty string if debugging)")
+                             + "(use empty string if debugging)")
     parser.add_argument("-n", "--no-rename",
                         action="store_true",
                         help="Don't rename the file")

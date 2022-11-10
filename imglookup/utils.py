@@ -14,7 +14,7 @@ def init_logger(args):
     verbose = args.verbose
 
 
-def verbose(*msg):
+def verb(*msg):
     if verbose:
         print("VERB:", *msg)
 
