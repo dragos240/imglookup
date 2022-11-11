@@ -1,6 +1,6 @@
 from io import BytesIO
 from time import sleep
-from typing import Iterator, List, Tuple, Dict
+from typing import Iterator, List, Dict
 from urllib import parse
 from contextlib import contextmanager
 from os import environ
@@ -16,9 +16,14 @@ from .utils import (verb,
                     err,
                     warn)
 from .api import Api, ApiError, DBType
+from .types.saucenao import (SaucenaoResponse,
+                             SaucenaoResult)
+from .types.e621 import E621Result
 
 
 API_URL = "https://saucenao.com/search.php"
+SIMILARITY_THRESHOLD = 60.0
+MAX_FETCH_ATTEMPTS = 3
 
 
 class SauceNaoApi(Api):
@@ -37,14 +42,18 @@ class SauceNaoApi(Api):
     def get_results(self):
         pass
 
+    def load_json_data(self, path: str) -> SaucenaoResponse:
+        with open(path, 'r') as f:
+            response = json.loads(
+                f.read(), object_hook=SaucenaoResponse.from_json)
+            return response
+
     def fetch_response(self,
                        path: str,
-                       store_json: bool = False) -> Tuple[dict, dict]:
+                       store_json: bool = False) -> SaucenaoResponse:
         """Handles the REST response, returns the header and results"""
         if path.endswith('.json'):
-            with open(path, 'r') as f:
-                res = json.loads(f.read())
-                return res['header'], res['results']
+            return self.load_json_data(path)
         file_ext = path.split('.')[-1]
         files = {}
         # Use a thumbnail instead of base image to reduce bandwidth for very
@@ -66,72 +75,70 @@ class SauceNaoApi(Api):
             if store_json:
                 with open('debug-saucenao.json', 'w') as f:
                     f.write(r.text)
-            res = json.loads(r.text)
-            return res['header'], res['results']
+            response = json.loads(
+                r.text, object_hook=SaucenaoResponse.from_json)
+            return response
         raise Exception("Out of attempts.")
 
-
-SIMILARITY_THRESHOLD = 60.0
-MAX_FETCH_ATTEMPTS = 3
-
-
-def sort_func(e):
-    """Sort by similarity"""
-    return SIMILARITY_THRESHOLD - float(e['header']['similarity'])
-
-
-def filter_func(e):
-    """Return True if `similarity` is greater than the threshold"""
-    return float(e['header']['similarity']) > SIMILARITY_THRESHOLD
-
-
-def get_post_ids(paths: List[str],
-                 args: Namespace) -> Dict[str, List[str]]:
-    """Gets post IDs for each path"""
-    files = {}
-    if not paths and args.saucenao:
-        paths = [args.saucenao]
-    try:
-        for path in paths:
-            if exists(path + '.json'):
-                print(f"Tag file exists for {path}, skipping...")
-                continue
-            print(f"Beginning parse for {path}...")
-            post_ids = []
-            header, results = fetch_response(path, args.store_json)
-
-            # Handle API stuff
-            user_id = int(header['user_id'])
-            status = int(header['status'])
-            if user_id > 0:
-                if status > 0:
-                    warn("Index resolution error.")
-                elif status < 0:
-                    raise ApiError("Bad image or other request error.")
-            else:
-                raise ApiError("API did not respond. Cannot continue.")
-
-            # Handle results
-            results = list(filter(filter_func, results))
-            results.sort(key=sort_func)
-            if len(results) == 0:
-                warn("No close matches for", path)
-                continue
-            for idx, result in enumerate(results):
-                try:
-                    post_id = result['data']['e621_id']
-                    post_ids.append(post_id)
-                except KeyError:
-                    verb("KeyError. Continuing")
-                    verb("json_data:", result['data'])
+    def get_post_ids(self,
+                     paths: List[str],
+                     args: Namespace) -> Dict[str, List[int]]:
+        """Gets post IDs for each path"""
+        files = {}
+        if not paths and args.saucenao:
+            paths = [args.saucenao]
+        try:
+            for path in paths:
+                if exists(path + '.json'):
+                    print(f"Tag file exists for {path}, skipping...")
                     continue
-            files[path] = post_ids
-    except ApiError as e:
-        err("ApiError occurred", error=e)
-    except Exception as e:
-        err("Other error encountered:", error=e)
+                print(f"Beginning parse for {path}...")
+                post_ids = []
+                response = self.fetch_response(path, args.store_json)
 
-    return files
+                # Handle API stuff
+                user_id: int = response.header.user_id
+                status: int = response.header.status
+                if user_id > 0:
+                    if status > 0:
+                        warn("Index resolution error.")
+                    elif status < 0:
+                        raise ApiError("Bad image or other request error.")
+                else:
+                    raise ApiError("API did not respond. Cannot continue.")
+
+                # Handle results
+                results = list(filter(filter_func, response.results))
+                results.sort(key=sort_func)
+                if len(results) == 0:
+                    warn("No close matches for", path)
+                    continue
+                # TODO: Check for sources other than e621
+                for result in results:
+                    try:
+                        post_id: int = result.data.e621_id
+                        post_ids.append(post_id)
+                    except KeyError:
+                        verb("KeyError. Continuing")
+                        verb("json_data:", result.to_json())
+                        continue
+                files[path] = post_ids
+        except ApiError as e:
+            err("ApiError occurred", error=e)
+        except Exception as e:
+            err("Other error encountered:", error=e)
+
+        return files
+
+
+def sort_func(result: SaucenaoResult):
+    """Sort by similarity"""
+    return SIMILARITY_THRESHOLD - float(result.header.similarity)
+
+
+def filter_func(result: SaucenaoResult):
+    """Return True if `similarity` is greater than the threshold"""
+    return float(result.header.similarity) > SIMILARITY_THRESHOLD
 
 
 @contextmanager

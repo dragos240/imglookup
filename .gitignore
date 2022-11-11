@@ -6,3 +6,4 @@ identify_images_v1.1.py
 *.png
 *.jpg
 .env
+*.pyi

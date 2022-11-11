@@ -1,6 +1,7 @@
-from abc import ABC
-import json
-from typing import List, Any
+from typing import List
+
+from .generic import JsonData, ResultData
+
 
 """
 Structure of data:
@@ -26,23 +27,6 @@ SaucenaoResponse
         +-- JsonData
         +-- SaucenaoResultHeader
 """
-
-
-class JsonData(ABC):
-    """Abstract data class"""
-
-    def __str__(self) -> str:
-        return json.dumps(self.__dict__, ensure_ascii=False)
-
-    def __repr__(self):
-        return self.__str__()
-
-    def to_json(self):
-        return self.__str__()
-
-    @classmethod
-    def from_json(cls, json_dict: Any):
-        return cls()
 
 
 class SaucenaoResponseIndexData(JsonData):
@@ -95,7 +79,7 @@ class SaucenaoResult(JsonData):
 
     def __init__(self,
                  header: SaucenaoResultHeader,
-                 data: JsonData):
+                 data: ResultData):
         self.header = header
         self.data = data
 
@@ -104,6 +88,7 @@ class SaucenaoResponseHeader(JsonData):
     """Top level header in a Saucenao API response"""
 
     def __init__(self,
+                 user_id: int,
                  short_limit: int,
                  long_limit: int,
                  short_remaining: int,
@@ -113,6 +98,7 @@ class SaucenaoResponseHeader(JsonData):
                  minimum_similarity: int,
                  results_returned: int,
                  index: SaucenaoResultHeader):
+        self.user_id = user_id
         self.short_limit = short_limit
         self.long_limit = long_limit
         self.short_remaining = short_remaining
@@ -125,7 +111,8 @@ class SaucenaoResponseHeader(JsonData):
 
     @classmethod
     def from_json(cls, json_dict: dict):
-        return cls(json_dict['short_limit'],
+        return cls(json_dict['user_id'],
+                   json_dict['short_limit'],
                    json_dict['long_limit'],
                    json_dict['short_remaining'],
                    json_dict['long_remaining'],
